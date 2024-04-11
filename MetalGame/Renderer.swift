@@ -63,6 +63,8 @@ class Renderer: NSObject, MTKViewDelegate {
         metalKitView.depthStencilPixelFormat = MTLPixelFormat.depth32Float_stencil8
         metalKitView.colorPixelFormat = MTLPixelFormat.bgra8Unorm_srgb
         metalKitView.sampleCount = 1
+  
+        metalKitView.presentsWithTransaction = true
         
         let mtlVertexDescriptor = Renderer.buildMetalVertexDescriptor()
         
@@ -292,14 +294,12 @@ class Renderer: NSObject, MTKViewDelegate {
                 
                 renderEncoder.popDebugGroup()
                 
-                renderEncoder.endEncoding()
-                
-                if let drawable = view.currentDrawable {
-                    commandBuffer.present(drawable)
-                }
+                renderEncoder.endEncoding()                
             }
             
             commandBuffer.commit()
+            commandBuffer.waitUntilScheduled()
+            view.currentDrawable?.present()
         }
     }
     
