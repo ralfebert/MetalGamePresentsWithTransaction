@@ -10,6 +10,7 @@
 import Metal
 import MetalKit
 import simd
+import os
 
 // The 256 byte aligned size of our uniform structure
 let alignedUniformsSize = (MemoryLayout<Uniforms>.size + 0xFF) & -0x100
@@ -42,6 +43,8 @@ class Renderer: NSObject, MTKViewDelegate {
     var rotation: Float = 0
     
     var mesh: MTKMesh
+    
+    let signposter = OSSignposter()
     
     init?(metalKitView: MTKView) {
         self.device = metalKitView.device!
@@ -213,6 +216,14 @@ class Renderer: NSObject, MTKViewDelegate {
     func draw(in view: MTKView) {
         /// Per frame updates hare
         
+        let signpostID = signposter.makeSignpostID()
+        let signpostName: StaticString = "Renderer draw"
+        let state = signposter.beginInterval(signpostName, id: signpostID)
+
+        defer {
+            signposter.endInterval(signpostName, state)
+        }
+        
         _ = inFlightSemaphore.wait(timeout: DispatchTime.distantFuture)
         
         if let commandBuffer = commandQueue.makeCommandBuffer() {
@@ -228,7 +239,16 @@ class Renderer: NSObject, MTKViewDelegate {
             
             /// Delay getting the currentRenderPassDescriptor until we absolutely need it to avoid
             ///   holding onto the drawable and blocking the display pipeline any longer than necessary
+
+            let start = DispatchTime.now()
+
             let renderPassDescriptor = view.currentRenderPassDescriptor
+                    
+            let waitTime = Double(DispatchTime.now().uptimeNanoseconds - start.uptimeNanoseconds) / 1_000_000
+            if waitTime > 10 {
+                print("⚠️ waited \(Int(waitTime)) ms for currentRenderPassDescriptor")
+                self.signposter.emitEvent("currentRenderPassDescriptor stalled", "⚠️ waited \(Int(waitTime)) ms for currentRenderPassDescriptor")
+            }
             
             if let renderPassDescriptor = renderPassDescriptor, let renderEncoder = commandBuffer.makeRenderCommandEncoder(descriptor: renderPassDescriptor) {
                 
